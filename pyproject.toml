@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tvi-solphit-ingialla"
+version = "0.1.0"
+description = "Ingialla: higher-level utilities under the tvi.solphit namespace, built on tvi-solphit tools and others of course"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "Tobias Hagenbeek", email = "tobias@solphit.com" }]
+keywords = ["solphit", "ingialla", "nlp", "search", "etl", "utilities"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+]
+
+# --- Runtime deps ---
+dependencies = [
+  "tvi-solphit-base==0.1.0",
+  "lxml",
+  "tqdm",
+  "scikit-learn",
+  "faiss-cpu",
+  "numpy",
+  "joblib",
+  "sqlite-utils",
+  "sentence-transformers",
+  "beautifulsoup4",
+  "requests",
+  "openai",
+  "elasticsearch==8.19.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/solphit/tvi-solphit-ingialla"
+Issues   = "https://github.com/solphit/tvi-solphit-ingialla/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+license-files = ["LICENSE"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# (Optional) split heavy deps into extras:
+# [project.optional-dependencies]
+# nlp = ["faiss-cpu", "sentence-transformers"]
+# search = ["elasticsearch==8.19.2"]
+# http = ["requests", "beautifulsoup4"]
