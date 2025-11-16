@@ -16,7 +16,7 @@ def _hash8(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()[:8]
 
 def safe_filename(title: str, max_len: int = 120) -> str:
-    if not title:
+    if not title or title == "":
         title = "untitled"
     cleaned = "".join(c if (c.isalnum() or c in " ._-") else "_" for c in title)
     cleaned = " ".join(cleaned.split()).strip()

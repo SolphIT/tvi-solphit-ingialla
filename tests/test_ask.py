@@ -1,4 +1,5 @@
 from tvi.solphit.ingialla.ask import knn_search, Generator
+import pytest
 
 class FakeES:
     def __init__(self): self.kw = None
@@ -35,3 +36,7 @@ def test_generator_ollama_error_fallback(monkeypatch):
     g = Generator(provider="ollama", model="m")
     out = g.generate("Q?", ["C"])
     assert "[Context only]" in out
+
+def test_generator_unknown_provider_raises():
+    with pytest.raises(ValueError):
+        Generator(provider="xyz", model="irrelevant")
