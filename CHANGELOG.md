@@ -1,8 +1,22 @@
 # Changelog
-
 All notable changes to **tvi-solphit-ingialla** will be documented in this file.
-
 The format follows Semantic Versioning and the keep-a-changelog structure.
+
+## [0.3.0] - 2025-11-17
+### Added
+- Conversational context support: Generator now accepts a history of prior turns (user/assistant) for true multi-turn Q&A.
+- Streaming chat generation: Ollama backend supports `/api/chat` with streaming tokens, enabling live responses.
+- API surface for history: `ask.py` and downstream consumers can pass `history` and tune `history_limit`.
+- Backward-compatible: Single-turn and context-free flows remain supported.
+
+### Changed
+- Generator uses `/api/chat` endpoint for Ollama instead of `/api/generate` for chat-aware answers.
+- Service layer (`discera_service/service.py`) now reconstructs conversation history from Elasticsearch and passes it to the generator.
+- Improved error handling for streaming and non-streaming generation.
+
+### Fixed
+- Edge cases in history reconstruction (avoids duplicate user turns).
+- Defensive fallback for partial or malformed streaming responses.
 
 ## [0.2.0] - 2025-11-16
 ### Added
