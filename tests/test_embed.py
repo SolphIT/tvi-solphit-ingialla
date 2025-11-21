@@ -309,3 +309,31 @@ def test_query_embedder_subclass_for_st(monkeypatch):
     vecs = qe.embed(["a", "b", "c"])
     assert vecs.shape == (3, 6)
     np.testing.assert_allclose(np.linalg.norm(vecs, axis=1), 1.0, atol=1e-6)
+
+
+def test_embedder_single_text_cache(monkeypatch):
+    from tvi.solphit.ingialla.embed import EmbedConfig, Embedder
+    calls = []
+    class FakeST:
+        def __init__(self, model, device=None):
+            pass
+        def get_sentence_embedding_dimension(self):
+            return 2
+        def encode(self, texts, **kwargs):
+            calls.append(texts)
+            return np.array([[1.0, 0.0] for _ in texts], dtype="float32")
+    monkeypatch.setattr("tvi.solphit.ingialla.embed.SentenceTransformer", FakeST)
+    e = Embedder(EmbedConfig(backend="st", model="unused", batch_size=1))
+    # First call populates cache
+    arr1 = e.embed(["hello"])
+    # Second call should hit cache (calls should not increment)
+    arr2 = e.embed(["hello"])
+    assert calls == [["hello"]]
+    assert np.allclose(arr1, arr2)
+    # Third call with different text should call encode again
+    arr3 = e.embed(["world"])
+    assert calls == [["hello"], ["world"]]
+    # Fourth call with previous text should hit cache again
+    arr4 = e.embed(["hello"])
+    assert calls == [["hello"], ["world"]]
+    assert np.allclose(arr1, arr4)

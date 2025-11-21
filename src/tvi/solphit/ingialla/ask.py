@@ -1,14 +1,36 @@
 # tvi/solphit/ingialla/ask.py
 from __future__ import annotations
-import os, time
+
+import os
+import time
 from typing import List, Sequence, Optional, Iterable, Tuple
+
 import requests
 from elasticsearch import Elasticsearch
+
 from tvi.solphit.base.logging import SolphitLogger
 from tvi.solphit.ingialla.es import CHUNKS
-log = SolphitLogger.get_logger("tvi.solphit.ingalla.ask")
+
+log = SolphitLogger.get_logger("tvi.solphit.ingialla.ask")
 
 
+# =========================
+# k-NN small in-process TTL cache
+# =========================
+# Keyed by: (es-flavor, index, k, num_candidates, rounded_qvec)
+# Value: (timestamp_seconds, es_response_dict)
+_KNN_CACHE: dict[
+    tuple,
+    tuple,
+] = {}
+_KNN_TTL_SEC: float = 30.0
+
+def _qvec_key(qvec: Sequence[float]) -> Tuple[float, ...]:
+    """
+    Build a stable, compact key for a query vector by rounding elements
+    to 5 decimals. This keeps keys small and avoids floating-point noise.
+    """
+    return tuple(round(float(x), 5) for x in qvec)
 
 def knn_search(
     es: Elasticsearch,
@@ -19,10 +41,26 @@ def knn_search(
     num_candidates: int = 1000,
     include_fields: Optional[Sequence[str]] = None,
 ):
+
     """
     Run an ES dense_vector k-NN search.
+    Adds a per-process TTL cache so repeated identical k-NN queries
+    within a short interval do not hammer Elasticsearch.
     """
-    return es.search(
+
+    try:
+        flavor = "es8" if hasattr(es, "options") else "es"
+    except Exception:
+        flavor = "es"
+    key = (flavor, index, int(k), int(num_candidates), _qvec_key(qvec))
+    now = time.time()
+    try:
+        ts, cached = _KNN_CACHE.get(key, (0.0, None))
+        if cached is not None and (now - ts) <= _KNN_TTL_SEC:
+            return cached
+    except Exception:
+        pass
+    res = es.search(
         index=index,
         knn={
             "field": field,
@@ -33,6 +71,12 @@ def knn_search(
         _source=list(include_fields) if include_fields else ["title", "source_path", "chunk_index", "text"],
     )
 
+    try:
+        _KNN_CACHE[key] = (now, res)
+    except Exception:
+        pass
+    return res
+
 
 class Generator:
     """
@@ -40,6 +84,9 @@ class Generator:
 
     - provider="none": echoes retrieved contexts (no model call).
     - provider="ollama": /api/chat with messages (supports stream/non-stream).
+
+    NOTE: This class exposes `generate` and (optionally) `generate_stream`
+    and will be used by upstream services. Keep signature backward-compatible.
     """
 
     def __init__(self, provider: str, model: str, verbose: bool = False) -> None:
@@ -55,6 +102,8 @@ class Generator:
 
     @staticmethod
     def _system_prompt() -> str:
+        # Keep the default guardrails minimal; higher-level callers may pass
+        # a richer system_preprompt to steer verbosity.
         return (
             "You are a helpful assistant. Use ONLY the provided context snippets when answering. "
             "Cite snippets with bracketed numbers like [1], [2]. "
@@ -116,8 +165,7 @@ class Generator:
             r = requests.post(f"{self.ollama_url}/api/chat", json=payload, timeout=timeout)
             r.raise_for_status()
             data = r.json() or {}
-            # /api/chat returns either {"message":{"content": "..."}...} or an OpenAI-like choices;
-            # pick the safe path:
+            # /api/chat returns either {"message":{"content": "..."}...} or "response"
             if "message" in data and isinstance(data["message"], dict):
                 return (data["message"].get("content") or "").strip()
             if "response" in data:  # some builds mirror /api/generate fielding
@@ -145,8 +193,9 @@ class Generator:
         """
         if self.provider != "ollama":
             # Fall back to non-streaming but yield once
-            yield self.generate(question, contexts, history=history, temperature=temperature, timeout=timeout,
-                                system_preprompt=system_preprompt)
+            yield self.generate(
+                question, contexts, history=history, temperature=temperature, timeout=timeout, system_preprompt=system_preprompt
+            )
             return
 
         messages = self._build_messages(question, contexts, history, system_preprompt)
@@ -180,5 +229,6 @@ class Generator:
         except Exception as ex:
             log.error(f"Ollama chat stream failed: {ex}")
             # Degrade to one-shot
-            yield self.generate(question, contexts, history=history, temperature=temperature, timeout=timeout,
-                                system_preprompt=system_preprompt)
+            yield self.generate(
+                question, contexts, history=history, temperature=temperature, timeout=timeout, system_preprompt=system_preprompt
+            )
