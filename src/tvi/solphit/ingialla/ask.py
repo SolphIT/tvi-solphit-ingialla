@@ -1,13 +1,13 @@
 # tvi/solphit/ingialla/ask.py
 from __future__ import annotations
-import os
-from typing import List, Sequence, Optional, Iterable
+import os, time
+from typing import List, Sequence, Optional, Iterable, Tuple
 import requests
 from elasticsearch import Elasticsearch
 from tvi.solphit.base.logging import SolphitLogger
 from tvi.solphit.ingialla.es import CHUNKS
+log = SolphitLogger.get_logger("tvi.solphit.ingalla.ask")
 
-log = SolphitLogger.get_logger("tvi.solphit.ingialla.ask")
 
 
 def knn_search(
