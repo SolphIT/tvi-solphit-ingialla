@@ -69,7 +69,6 @@ class Generator:
     def _build_messages(
         question: str,
         contexts: List[str],
-        *,
         history: Optional[List[dict]] = None,
         system_preprompt: Optional[str] = None,
     ) -> List[dict]:

@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 import os, hashlib, time
-from typing import List, Tuple, Optional, Iterable
+from typing import List, Tuple, Optional, Iterable, Callable, Iterator
 from elasticsearch import Elasticsearch, helpers
 from elastic_transport import ConnectionError as ElasticConnectionError  # type: ignore
 from tvi.solphit.base.logging import SolphitLogger
@@ -94,19 +94,50 @@ def mark_kb_done(es: Elasticsearch, xml_path: str):
               doc_as_upsert=True, request_timeout=30)
 
 def get_unprocessed_for_kb(es: Elasticsearch, max_pages: Optional[int]) -> List[tuple[str, str]]:
+    """
+    Kept for backward compatibility (single-shot search). Limited by index.max_result_window.
+    Prefer iter_unprocessed_for_kb() for streaming beyond 10k.
+    """
     size = max_pages or 10000
     resp = es.search(index=ARTICLES, size=size,
                      query={"bool": {"filter": [{"term": {"split_done": True}}, {"term": {"kb_done": False}}]}},
                      request_timeout=60)
     return [(h["_source"].get("title",""), h["_source"]["xml_path"]) for h in resp["hits"]["hits"]]
 
-def bulk_index_chunks(es: Elasticsearch, rows: Iterable[dict]):
+def iter_unprocessed_for_kb(es: Elasticsearch, page_size: int = 1000) -> Iterator[tuple[str, str, str]]:
+    """
+    Stream all unprocessed articles using helpers.scan() (scroll under the hood),
+    which bypasses the 10k 'from+size' limit. Yields (title, xml_path, _id).
+    """
+    query = {"bool": {"filter": [{"term": {"split_done": True}}, {"term": {"kb_done": False}}]}}
+    for h in helpers.scan(
+        client=es,
+        index=ARTICLES,
+        query={"query": query},
+        size=max(1, int(page_size)),
+        preserve_order=True,
+        _source_includes=["title", "xml_path"],
+        request_timeout=300,
+    ):
+        src = h.get("_source", {})
+        title = src.get("title", "")
+        xml_path = src.get("xml_path")
+        if not xml_path:
+            continue
+        yield title, xml_path, h.get("_id")
+
+def bulk_index_chunks(es: Elasticsearch, rows: Iterable[dict], progress_cb: Callable[[int], None] | None = None):
+    """
+    Streamed bulk indexing. If progress_cb is provided, it's called once per action
+    (use it to update a tqdm bar without spamming the log).
+    """
     actions = ({"_op_type": "index", "_index": CHUNKS, "_id": r["chunk_id"], **r} for r in rows)
-    count = 0
     for ok, info in helpers.streaming_bulk(es, actions, chunk_size=2000, request_timeout=300):
-        count += 1
+        if progress_cb:
+            try:
+                progress_cb(1)
+            except Exception:
+                pass
         if not ok:
-            log.warning("[es:bulk] failed action: %s", info)
-        if count % 2000 == 0:
-            log.debug("[es:bulk] indexed %s chunks...", count)
-    log.info("[es:bulk] indexed total %s chunks", count)
+            # Keep failures in DEBUG to avoid noisy INFO logs
+            log.debug("[es:bulk] failed action: %s", info)

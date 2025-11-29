@@ -2,6 +2,22 @@
 All notable changes to **tvi-solphit-ingialla** will be documented in this file.
 The format follows Semantic Versioning and the keep-a-changelog structure.
 
+## [0.3.7] - 2025-11-29
+### Fixing
+- Build messages 4 params not 2 
+
+## [0.3.6] - 2025-11-29
+### Added
+- logging/information for kb build (improvement) 
+
+## [0.3.5] - 2025-11-29
+### Added
+- logging/information for kb build (improvement) 
+
+## [0.3.4] - 2025-11-29
+### Added
+- logging/information for file splitting (improvement) 
+
 ## [0.3.3] - 2025-11-29
 ### Added
 - logging/information for file splitting 
