@@ -1,10 +1,16 @@
+
 from __future__ import annotations
 import os, hashlib, time
 from typing import List, Tuple, Optional, Iterable
 from elasticsearch import Elasticsearch, helpers
+from elastic_transport import ConnectionError as ElasticConnectionError  # type: ignore
+from tvi.solphit.base.logging import SolphitLogger
+
+log = SolphitLogger.get_logger("tvi.solphit.ingialla.es")
 
 ARTICLES = "kb_articles"
 CHUNKS = "kb_chunks"
+PERSONALITY = "personality"
 
 def es_client() -> Elasticsearch:
     url = os.environ.get("ELASTIC_URL", "http://localhost:9200")
@@ -12,7 +18,17 @@ def es_client() -> Elasticsearch:
         "Accept": "application/vnd.elasticsearch+json; compatible-with=8",
         "Content-Type": "application/vnd.elasticsearch+json; compatible-with=8",
     }
-    return Elasticsearch(url, headers=headers, request_timeout=60)
+    es = Elasticsearch(url, headers=headers, request_timeout=60)
+    # Lightweight connectivity check; times out quickly if not reachable
+    try:
+        if not es.ping():
+            raise RuntimeError("ES ping returned False")
+    except Exception as ex:
+        raise RuntimeError(
+            f"Elasticsearch not reachable at {url}. "
+            "Start ES (e.g., docker run -p 9200:9200 ...) or set $ELASTIC_URL."
+        ) from ex
+    return es
 
 def ensure_articles_index():
     es = es_client()
@@ -86,4 +102,11 @@ def get_unprocessed_for_kb(es: Elasticsearch, max_pages: Optional[int]) -> List[
 
 def bulk_index_chunks(es: Elasticsearch, rows: Iterable[dict]):
     actions = ({"_op_type": "index", "_index": CHUNKS, "_id": r["chunk_id"], **r} for r in rows)
-    helpers.bulk(es, actions, chunk_size=2000, request_timeout=300)
+    count = 0
+    for ok, info in helpers.streaming_bulk(es, actions, chunk_size=2000, request_timeout=300):
+        count += 1
+        if not ok:
+            log.warning("[es:bulk] failed action: %s", info)
+        if count % 2000 == 0:
+            log.debug("[es:bulk] indexed %s chunks...", count)
+    log.info("[es:bulk] indexed total %s chunks", count)

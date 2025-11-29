@@ -1,3 +1,4 @@
+
 # tvi/solphit/ingialla/ask.py
 from __future__ import annotations
 import os
@@ -8,7 +9,6 @@ from tvi.solphit.base.logging import SolphitLogger
 from tvi.solphit.ingialla.es import CHUNKS
 
 log = SolphitLogger.get_logger("tvi.solphit.ingialla.ask")
-
 
 def knn_search(
     es: Elasticsearch,
@@ -33,15 +33,12 @@ def knn_search(
         _source=list(include_fields) if include_fields else ["title", "source_path", "chunk_index", "text"],
     )
 
-
 class Generator:
     """
     Very small LLM wrapper (Ollama | none), now chat-aware.
-
     - provider="none": echoes retrieved contexts (no model call).
     - provider="ollama": /api/chat with messages (supports stream/non-stream).
     """
-
     def __init__(self, provider: str, model: str, verbose: bool = False) -> None:
         self.provider = (provider or "").lower()
         self.model = model
@@ -72,6 +69,7 @@ class Generator:
     def _build_messages(
         question: str,
         contexts: List[str],
+        *,
         history: Optional[List[dict]] = None,
         system_preprompt: Optional[str] = None,
     ) -> List[dict]:
@@ -103,7 +101,6 @@ class Generator:
             # Echo contexts for debugging/analysis
             labeled = [f"[{i}] {c}" for i, c in enumerate(contexts, start=1)]
             return "[Context only]\nQ: " + question + "\n\n" + "\n\n".join(labeled)
-
         # Ollama chat (non-streaming)
         messages = self._build_messages(question, contexts, history, system_preprompt)
         payload = {
@@ -148,7 +145,6 @@ class Generator:
             yield self.generate(question, contexts, history=history, temperature=temperature, timeout=timeout,
                                 system_preprompt=system_preprompt)
             return
-
         messages = self._build_messages(question, contexts, history, system_preprompt)
         payload = {
             "model": self.model,

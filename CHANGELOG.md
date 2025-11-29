@@ -2,6 +2,17 @@
 All notable changes to **tvi-solphit-ingialla** will be documented in this file.
 The format follows Semantic Versioning and the keep-a-changelog structure.
 
+## [0.3.3] - 2025-11-29
+### Added
+- logging/information for file splitting 
+
+## [0.3.2] - 2025-11-29
+### Added
+- logging/information for build kb
+ 
+## [0.3.1] - 2025-11-29
+???
+
 ## [0.3.0] - 2025-11-17
 ### Added
 - Conversational context support: Generator now accepts a history of prior turns (user/assistant) for true multi-turn Q&A.

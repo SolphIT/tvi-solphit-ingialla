@@ -1,7 +1,11 @@
+
 from __future__ import annotations
-import os, requests, numpy as np
+import os, requests, numpy as np, time
 from dataclasses import dataclass
 from typing import List
+from tvi.solphit.base.logging import SolphitLogger
+
+log = SolphitLogger.get_logger("tvi.solphit.ingialla.embed")
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -34,32 +38,43 @@ class Embedder:
                 pass
             self.model = SentenceTransformer(self.cfg.model, device=device)
             self.dim = self.model.get_sentence_embedding_dimension()
+            log.info("[embed:init] sentence-transformers model=%s dim=%s device=%s",
+                     self.cfg.model, self.dim, device)
         elif be == "ollama":
             self.ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
             self.model_name = self.cfg.model
-            r = requests.post(f"{self.ollama_url}/api/embed", json={"model": self.model_name, "input": "probe"}, timeout=60)
+            log.info("[embed:init] probing Ollama %s model=%s", self.ollama_url, self.model_name)
+            r = requests.post(f"{self.ollama_url}/api/embed",
+                              json={"model": self.model_name, "input": "probe"}, timeout=60)
             r.raise_for_status()
             vec = (r.json().get("embeddings") or [[]])[0]
             self.dim = len(vec)
+            log.info("[embed:init] embedding dimension=%s", self.dim)
         else:
             raise ValueError(f"Unknown embeddings backend: {self.cfg.backend}")
 
     def embed(self, texts: List[str]) -> np.ndarray:
         be = self.cfg.backend.lower()
         if be == "st":
-            embs = self.model.encode(texts, batch_size=self.cfg.batch_size, show_progress_bar=False, normalize_embeddings=True)
+            embs = self.model.encode(texts, batch_size=self.cfg.batch_size,
+                                     show_progress_bar=False, normalize_embeddings=True)
             arr = np.asarray(embs, dtype="float32")
             self.dim = arr.shape[1]
+            log.debug("[embed:st] encoded %s texts dim=%s", len(texts), self.dim)
             return arr
         elif be == "ollama":
             arrs = []
             for i in range(0, len(texts), self.cfg.batch_size):
                 batch = texts[i:i+self.cfg.batch_size]
-                r = requests.post(f"{self.ollama_url}/api/embed", json={"model": self.model_name, "input": batch}, timeout=180)
+                t0 = time.time()
+                log.debug("[embed:ollama] POST /api/embed size=%s model=%s", len(batch), self.model_name)
+                r = requests.post(f"{self.ollama_url}/api/embed",
+                                  json={"model": self.model_name, "input": batch}, timeout=180)
                 r.raise_for_status()
                 embs = r.json().get("embeddings") or []
                 import numpy as _np
                 arrs.append(_np.vstack([_np.array(v, dtype="float32") for v in embs]))
+                log.debug("[embed:ollama] received %s vectors in %.2fs", len(embs), time.time()-t0)
             allv = np.vstack(arrs) if arrs else np.zeros((0, self.dim), dtype="float32")
             norms = np.linalg.norm(allv, axis=1, keepdims=True) + 1e-12
             return (allv / norms).astype("float32")

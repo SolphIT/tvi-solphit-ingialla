@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 import os
 import hashlib
@@ -9,7 +10,7 @@ from tvi.solphit.base.logging import SolphitLogger
 log = SolphitLogger.get_logger("tvi.solphit.ingialla.wikidump")
 
 WINDOWS_RESERVED = {
-    "CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1,10)), *(f"LPT{i}" for i in range(1,10))
+    "CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(1,10)], *[f"LPT{i}" for i in range(1,10)]
 }
 
 def _hash8(s: str) -> str:
@@ -28,7 +29,7 @@ def safe_filename(title: str, max_len: int = 120) -> str:
     max_len = max(8 + len(suffix), max_len)
     if len(cleaned) > max_len - len(suffix):
         cleaned = cleaned[: max_len - len(suffix)]
-        cleaned = cleaned.rstrip(" .")
+    cleaned = cleaned.rstrip(" .")
     return f"{cleaned}{suffix}" if not cleaned.endswith(suffix) else cleaned
 
 def _hashed_path(root: str, key: str, depth: int = 5) -> str:
@@ -70,13 +71,13 @@ def extract_articles(xml_path: str, output_dir: str, max_pages: int | None = Non
                 with open(path, 'wb') as out_file:
                     out_file.write(data)
                 pages_saved += 1
-                log.info(f"[{pages_saved}] Saved '{title}' -> {path}")
+                log.info("[{}] Saved '{}' -> {}".format(pages_saved, title, path))
                 mark_split_done(es, path, title)
             except OSError as e:
-                log.warning(f"[SKIP] Could not save '{title}' due to: {e}")
+                log.warning("[SKIP] Could not save '{}' due to: {}".format(title, e))
             elem.clear()
             while elem.getprevious() is not None:
                 del elem.getparent()[0]
         pbar.close()
-        log.info(f"Completed. Total pages saved: {pages_saved}")
+    log.info("Completed. Total pages saved: {}".format(pages_saved))
     return pages_saved
