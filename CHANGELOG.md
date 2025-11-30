@@ -2,6 +2,10 @@
 All notable changes to **tvi-solphit-ingialla** will be documented in this file.
 The format follows Semantic Versioning and the keep-a-changelog structure.
 
+## [0.4.0 -> 0.4.1] - 2025-11-30
+### Adding
+- adding the /chat endpoint 
+
 ## [0.3.7] - 2025-11-29
 ### Fixing
 - Build messages 4 params not 2 

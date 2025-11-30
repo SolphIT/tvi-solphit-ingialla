@@ -1,6 +1,6 @@
 [project]
 name = "tvi-solphit-ingialla"
-version = "0.3.7"
+version = "0.4.1"
 description = "Ingialla domain logic: ES backend, wikidump split, parsing/cleaning, chunking, embeddings, ask/KB build."
 readme = "README.md"
 requires-python = ">=3.9"
